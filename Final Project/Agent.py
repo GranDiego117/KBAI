@@ -67,4 +67,4 @@ class Agent:
 
 
         #print("Path: ", image_path, " type: ", problem_type, " visual: ", problem_hasVisual, " verbal: ", problem_hasVerbal)
-        return 1
+        return -1
