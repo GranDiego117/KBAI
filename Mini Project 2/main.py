@@ -6,6 +6,8 @@ def test():
     test_agent = BlockWorldAgent()
 
     initial_arrangement_1 = [["A", "B", "C"], ["D", "E"]]
+    #initial_arrangement_1 = [['C', 'H', 'B', 'D'], ['F', 'I', 'A'], ['E', 'J'], ['G']]
+    #goal_arrangement_1 = [['C', 'H', 'G'], ['D', 'I', 'A'], ['E', 'F', 'B'], ['J']]
     goal_arrangement_1 = [["A", "C"], ["D", "E", "B"]]
     goal_arrangement_2 = [["A", "B", "C", "D", "E"]]
     goal_arrangement_3 = [["D", "E", "A", "B", "C"]]
