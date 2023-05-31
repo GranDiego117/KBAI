@@ -29,5 +29,12 @@ def test():
     print(test_agent.solve(initial_arrangement_2, goal_arrangement_7))
     print(test_agent.solve(initial_arrangement_2, goal_arrangement_8))
 
+
+
+    initial_arrangement_3 = [['I', 'J', 'C', 'B'], ['F', 'E', 'A', 'K'], ['H', 'D', 'G']]
+    goal_arrangement_9 = [['J', 'D', 'I'], ['F'], ['H'], ['K', 'G', 'E'], ['B', 'C', 'A']]
+
+    print(test_agent.solve(initial_arrangement_3, goal_arrangement_9))
+
 if __name__ == "__main__":
     test()

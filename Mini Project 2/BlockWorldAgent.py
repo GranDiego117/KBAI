@@ -1,8 +1,11 @@
+import time
+
 class BlockWorldAgent:
     def __init__(self):
         pass
 
     def solve(self, initial_arrangement, goal_arrangement):
+        start_time = time.time()
         # Duplicate the initial_stack_copy into a new one to avoid changing the original configuration
         initial_stack_copy = []
         for stack in initial_arrangement:
@@ -117,6 +120,7 @@ class BlockWorldAgent:
                         #input("Press Enter to continue...")
 
                     block_movement(block, "Table", goal_stack_number)
-                    print_state()
-
+                    #print_state()
+        elapsed_time = time.time() - start_time
+        print(" time: ", elapsed_time)
         return moves
