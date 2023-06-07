@@ -13,6 +13,7 @@ from PIL import Image, ImageOps
 import numpy as np
 import cv2 as cv
 
+
 class Agent:
     # The default constructor for your Agent. Make sure to execute any
     # processing necessary before your Agent starts solving problems here.
