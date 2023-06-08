@@ -9,9 +9,9 @@
 # These methods will be necessary for the project's main method to run.
 # 
 # Install Pillow and uncomment this line to access image processing.
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops
 import numpy as np
-import cv2 as cv
+import cv2
 
 
 class Agent:
@@ -33,6 +33,27 @@ class Agent:
     # Make sure to return your answer *as an integer* at the end of Solve().
     # Returning your answer as a string may cause your program to crash.
     def Solve(self,problem):
+
+        def apply_transformation(image, transformation):
+            if transformation == 0:  # change
+                print("|| Transformation = Change")
+                return image
+            elif transformation == 1:  # horizontal
+                print("|| Transformation = Horizontal")
+                image = cv2.flip(image, 1)
+            elif transformation == 2:  # vertical
+                print("|| Transformation = Vertical")
+                image = cv2.flip(image, 0)
+            elif transformation == 3:  # rotation_90
+                print("|| Transformation = rotation 90")
+                image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+            elif transformation == 4:  # rotation_180
+                print("|| Transformation = rotation 180")
+                image = cv2.rotate(image, cv2.ROTATE_180)
+            elif transformation == 5:  # rotation_270
+                print("|| Transformation = rotation 270")
+                image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            return image
         
         figure_a = problem.figures["A"]
         #image_path = figure_a.visualFilename
@@ -43,11 +64,21 @@ class Agent:
         problem_images = {}
         option_images = {}
 
+        # Tolerance in pixels for image differences
+        tolerance = 500000
+
         # Loop over each figure in the problem.
         for name, figure in problem.figures.items():
             # Load the image file.
             image_path = figure.visualFilename
-            image = Image.open(image_path)
+            #image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+            image = cv2.imread(image_path)
+
+            # Check if image is loaded properly
+            if image is None:
+                print(f"Error loading image {image_path}")
+                continue  # Skip this iteration and go to next figure
+
 
             # If the name is a letter, add it to the problem images. 
             if name.isalpha():
@@ -63,69 +94,126 @@ class Agent:
             B = problem_images.get('B')
             C = problem_images.get('C')
 
-            # Variables to store comparison results
+           # Variables to store comparison results
             AB_horizontal = AC_horizontal = AB_vertical = AC_vertical = 0
             AB_rotation = AC_rotation = [0, 0, 0]  # For 90, 180, 270 degrees respectively
 
-            # Check for horizontal reflection similarity between A and B
-            if np.array_equal(np.array(A), np.array(ImageOps.mirror(B))):
-                AB_horizontal = 1
+            # Check if there is any change at all between A and B, and A and C
+            AB_change = np.sum(cv2.absdiff(A, B)) == 0
+            AC_change = np.sum(cv2.absdiff(A, C)) == 0
 
-            # Check for horizontal reflection similarity between A and C
-            if np.array_equal(np.array(A), np.array(ImageOps.mirror(C))):
-                AC_horizontal = 1
-                
-            # Check for vertical reflection similarity between A and B
-            if np.array_equal(np.array(A), np.array(ImageOps.flip(B))):
-                AB_vertical = 1
+            # Check for horizontal reflection similarity
+            AB_horizontal = np.sum(cv2.absdiff(A, cv2.flip(B, 1))) < tolerance
+            AC_horizontal = np.sum(cv2.absdiff(A, cv2.flip(C, 1))) < tolerance
 
-            # Check for vertical reflection similarity between A and C
-            if np.array_equal(np.array(A), np.array(ImageOps.flip(C))):
-                AC_vertical = 1
+
+            # Check for vertical reflection similarity
+            AB_vertical = np.sum(cv2.absdiff(A, cv2.flip(B, 0))) < tolerance
+            AC_vertical = np.sum(cv2.absdiff(A, cv2.flip(C, 0))) < tolerance
+
 
             # Check for rotation similarity
-            for i, degree in enumerate([90, 180, 270]):
-                rotated_B = B.rotate(degree)
-                rotated_C = C.rotate(degree)
-                if np.array_equal(np.array(A), np.array(rotated_B)):
-                    AB_rotation[i] = 1
-                if np.array_equal(np.array(A), np.array(rotated_C)):
-                    AC_rotation[i] = 1
-
-            # Find contours in the images
-            contours1, _ = cv.findContours(cv.cvtColor(np.array(A), cv.COLOR_BGR2GRAY), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-            contours2, _ = cv.findContours(cv.cvtColor(np.array(B), cv.COLOR_BGR2GRAY), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-            contours3, _ = cv.findContours(cv.cvtColor(np.array(C), cv.COLOR_BGR2GRAY), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+            AB_rotation = [np.sum(cv2.absdiff(A, cv2.rotate(B, rot))) < tolerance for rot in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]]
+            AC_rotation = [np.sum(cv2.absdiff(A, cv2.rotate(C, rot))) < tolerance for rot in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]]
 
             # Check if contours are similar between A and B
-            AB_contour = cv.matchShapes(contours1[0], contours2[0], 1, 0.0)
+            AB_contour = np.sum(cv2.absdiff(A, B)) < tolerance
             # Check if contours are similar between A and C
-            AC_contour = cv.matchShapes(contours1[0], contours3[0], 1, 0.0)
+            AC_contour = np.sum(cv2.absdiff(A, C)) < tolerance
 
             # Create a list to hold the sequence of transformations that would take B to A and C to A
             transformations_to_apply = []
+            transformations_difference = []
+
+            transformations_difference.append(f"AB_change: {np.sum(cv2.absdiff(A, B))}")
+            transformations_difference.append(f"AC_change: {np.sum(cv2.absdiff(A, C))}")
+            transformations_difference.append(f"AB_horizontal: {np.sum(cv2.absdiff(A, cv2.flip(B, 1)))}")
+            transformations_difference.append(f"AC_horizontal:  {np.sum(cv2.absdiff(A, cv2.flip(C, 1)))}")
+            transformations_difference.append(f"AB_vertical: {np.sum(cv2.absdiff(A, cv2.flip(B, 0)))}")
+            transformations_difference.append(f"AC_vertical: {np.sum(cv2.absdiff(A, cv2.flip(C, 0)))}")
+
+            #cv2.imshow('A', A)
+            #cv2.imshow('A flipped', cv2.flip(A,1))
+            #cv2.imshow('C', C)
+            #flipped_B = cv2.flip(B, 1)
+            #diff_AB = cv2.absdiff(A, flipped_B)
+            #cv2.imshow('Difference between A and flipped B', diff_AB)
+            #cv2.waitKey(0)
+            
+            transformations_to_apply_AB = []
+            transformations_to_apply_AC = []
 
             # Determine the transformations to apply
-            if AB_horizontal == 1:
+            if AB_change:
+                transformations_to_apply.append('Change not detected between A and B')
+                transformations_to_apply_AB.append(0)
+            if AC_change:
+                transformations_to_apply.append('Change not detected between A and C')
+                transformations_to_apply_AC.append(0)
+            if AB_horizontal:
                 transformations_to_apply.append('Horizontal Reflection between A and B')
-            if AC_horizontal == 1:
+                transformations_to_apply_AB.append(1)
+            if AC_horizontal:
                 transformations_to_apply.append('Horizontal Reflection between A and C')
-            if AB_vertical == 1:
+                transformations_to_apply_AC.append(1)
+            if AB_vertical:
                 transformations_to_apply.append('Vertical Reflection between A and B')
-            if AC_vertical == 1:
+                transformations_to_apply_AB.append(2)
+            if AC_vertical:
                 transformations_to_apply.append('Vertical Reflection between A and C')
-            for i, degree in enumerate([90, 180, 270]):
-                if AB_rotation[i] == 1:
-                    transformations_to_apply.append(f'Rotation by {degree} degrees between A and B')
-                if AC_rotation[i] == 1:
-                    transformations_to_apply.append(f'Rotation by {degree} degrees between A and C')
-            if AB_contour == 1:
-                transformations_to_apply.append('Same contours between A and B')
-            if AC_contour == 1:
-                transformations_to_apply.append('Same contours between A and C')
+                transformations_to_apply_AC.append(2)
+            #for i, degree in enumerate([90, 180, 270]):
+            #    if AB_rotation[i] == 1:
+            #        transformations_to_apply.append(f'Rotation by {degree} degrees between A and B')
+            #        transformations_to_apply_AB.append(3 + i)
+            #    if AC_rotation[i] == 1:
+            #        transformations_to_apply.append(f'Rotation by {degree} degrees between A and C')
+            #        transformations_to_apply_AC.append(3 + i)
+           # if AB_contour:
+           #     transformations_to_apply.append('Same contours between A and B')
+           # if AC_contour:
+           #     transformations_to_apply.append('Same contours between A and C')
 
+            print(image_path)#, 'To find the image for quadrant D, apply these transformations: ', transformations_to_apply)
+            print('\n'.join(transformations_difference))
+            print('\n'.join(transformations_to_apply))
 
-            print(image_path, 'To find the image for quadrant D, apply these transformations: ', transformations_to_apply)
+             # Try to apply the transformations from A->B to C->D and A->C to B->D
+            print("===================================")
+            for option, D in option_images.items():
+                print(" Option: ", option, " # of B->D Transformations expected: ", len(transformations_to_apply_AB), " # of C->D transformations expected: ", len(transformations_to_apply_AC))
+            
+            # Initialize counters for successful transformations
+                success_count_AB = 0
+                success_count_AC = 0
+                # Apply each transformation from A to B on image C
+                for transformation in transformations_to_apply_AB:
+                    transformed_C = apply_transformation(C, transformation)
+                    print("Transformation C->D: ", transformation, " Transformation difference: ", np.sum(cv2.absdiff(transformed_C, D)))
+                    if np.sum(cv2.absdiff(transformed_C, D)) < tolerance:
+                        success_count_AB += 1
+                        print("Transformation C->D: ", transformation, " # of transformations analyzed: ", success_count_AB)
+
+                # Apply each transformation from A to C on image B
+                for transformation in transformations_to_apply_AC:
+                    transformed_B = apply_transformation(B, transformation)
+                    print("Transformation B->D: ", transformation, " Transformation difference: ", np.sum(cv2.absdiff(transformed_B, D)))
+                    if np.sum(cv2.absdiff(transformed_B, D)) < tolerance:
+                        success_count_AC += 1
+                        print("Transformation B->D: ", transformation, " # of transformations analyzed: ", success_count_AC)
+
+                # If the number of successful transformations equals the total number of transformations, we found our image
+                if success_count_AB == len(transformations_to_apply_AB) and success_count_AC == len(transformations_to_apply_AC):
+                    print("Answer: ", int(option))
+                    print("===================================")
+                    input("Press Enter to continue...")
+                    return int(option)
+            
+            print("No solution")
+            print("===================================")
+            input("Press Enter to continue...")
+
+            
 
 
         # If problem is 3x3
