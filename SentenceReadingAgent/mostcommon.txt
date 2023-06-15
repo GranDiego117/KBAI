@@ -259,7 +259,7 @@ draw
 left
 late
 run
-don’t
+donï¿½t
 while
 press
 close
@@ -518,3 +518,10 @@ east
 weight
 language
 among
+Red
+red
+adults
+wrote
+sings
+dog's
+written

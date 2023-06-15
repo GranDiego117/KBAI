@@ -539,18 +539,27 @@ class SentenceReadingAgent:
         # return a string representing the answer to the question.
         # Load word classifications from file
 
+        #print(sentence)
+        print(question)
+
         word_tags = self.word_tags
 
-        # Sentence and Question preprocessing
-        sentence = re.sub(r'[.,?\'"]', '', sentence)  
-        question = re.sub(r'[.,?\'"]', '', question).lower()
+        # Save the word-tag pairs in a new .txt file
+        with open('wordtags.txt', 'w') as f:
+            for word, tag in word_tags.items():
+                f.write(f'{word} {tag}\n')
+
+        # Preprocess the sentence and question by removing punctuation and converting to lower case
+        sentence = re.sub(r'[.,?\'"]', '', sentence)  # remove full stops, question marks, commas, and apostrophes
+        question = re.sub(r'[.,?\'"]', '', question).lower() # remove full stops, question marks, commas, and apostrophes
     
-        # map words of each sentence to their tag (e.g., "NOUN")
+         # Tokenize the sentence and map words to their part-of-speech
         sentence_words = sentence.split()
         sentence_tags = [word_tags.get(word) for word in sentence_words]
-        sentence_tags = [tag for tag in sentence_tags]  
+        sentence_tags = [tag for tag in sentence_tags]  # convert words to lower case
+        #print(sentence_tags)
 
-        # Check for time in sentence and add the tag "TIME"
+        # Check for time in sentence
         time_in_sentence = re.search(r'\b\d{1,2}:\d{2}(AM|PM)?\b', sentence)
         if time_in_sentence:
             time_index = sentence_words.index(time_in_sentence.group())
@@ -559,7 +568,7 @@ class SentenceReadingAgent:
         # Identify the type of question
         question_words = question.split()
         question_type = 'unknown'
-        
+        #print(" QUESTION: ", question)
         if 'who' in question_words:
             question_type = 'who'
         elif 'at' in question_words:
@@ -567,87 +576,61 @@ class SentenceReadingAgent:
         elif 'what' in question_words:
                 question_type = 'what'
         elif 'how' in question_words:
+            if 'much' in question_words:
+                question_type = 'how_much'
+            elif 'many' in question_words:
+                question_type = 'how_many'
+            else:
                 question_type = 'how'
         elif 'where' in question_words:
             question_type = 'where'
         elif 'when' in question_words:
             question_type = 'when'
         
-    
+        
+        # Check if we have a noun or a proper noun already present in the question
+        #print("QUESTION TYPE: ", question_type)
+        #print("SENTENCE: ",sentence_words, sentence_tags)
+
+        # Generate the answer based on the question type
         answer = None
-  
+
+        
         if question_type == 'who':
-            # If the question includes "did" or "does", and "to", return the PROPN that is not present in the question.
-            if ('did' in question_words or 'does' in question_words) and 'to' in question_words:
+            if 'did' in question_words:
+                verb = [word for word in question_words if word_tags.get(word, '').lower() == 'verb']
+                if 'to' in question_words:
+                    for index, word in enumerate(sentence_words):
+                        if word.lower() == 'to':
+                            if index + 1 < len(sentence_words):
+                                return sentence_words[index + 1]
+            else:
                 for word, tag in zip(sentence_words, sentence_tags):
-                    if tag in ['PROPN'] and word.lower() not in question_words:
-                        return word
-
-            # Identify if the sentence has another verb
-            sentence_verb = [word for word in sentence_words if word_tags.get(word, '') == 'VERB']
-            if sentence_verb:
-                verb_index_in_sentence = sentence_words.index(sentence_verb[0])
-
-                # If the question includes "was", return the NOUN or PROPN that comes after the verb in the sentence.
-                if 'was' in question_words:
-                    for word, tag in zip(sentence_words[verb_index_in_sentence+1:], sentence_tags[verb_index_in_sentence+1:]):
-                        if tag in ['PROPN', 'NOUN']:
-                            return word
-                        
-                else:
-                    for word, tag in zip(reversed(sentence_words[:verb_index_in_sentence]), reversed(sentence_tags[:verb_index_in_sentence])):
-                        return word
-                    
-
-        if question_type == 'where':
-            # Check if there is a particle (PART) in the sentence
-            part_indices = [index for index, tag in enumerate(sentence_tags) if tag == 'PART']
-            if part_indices:
-                # Return the first noun that appears after the last particle
-                for word, tag in zip(sentence_words[part_indices[-1]+1:], sentence_tags[part_indices[-1]+1:]):
                     if tag == 'NOUN':
-                        return word
-
-            # check if there is an adposition (ADP) in the sentence
-            adp_indices = [index for index, tag in enumerate(sentence_tags) if tag == 'ADP']
-            if adp_indices:
-                # Return the first noun that appears after the last adposition, unless the adposition is "of"
-                for index in reversed(adp_indices):
-                    if sentence_words[index].lower() == 'of':
-                        if index > 0 and sentence_tags[index - 1] == 'NOUN':
-                            return sentence_words[index - 1]
+                        if word.lower() != 'time':
+                            return word
                     else:
-                        for word, tag in zip(sentence_words[index+1:], sentence_tags[index+1:]):
-                            if tag == 'NOUN':
-                                return word
-
+                        return word
+            if 'told' in question_words:
+                for i, word in enumerate(sentence_words):
+                    if word.lower() == 'told':
+                        if i + 1 < len(sentence_words) and 'was' in question_words:
+                            return sentence_words[i + 1]
+                        elif i > 0:
+                            return sentence_words[i - 1]
+            
                         
 
         if question_type == 'what':
-            for i, word in enumerate(sentence_words):
-                if (word in question_words or sentence_tags[i] == 'ADJ'): # check that the word is in the question or tagged as ADJ
-                    if i + 1 < len(sentence_words) and sentence_tags[i + 1] == 'NOUN':
-                        return sentence_words[i + 1]  # return the noun AFTER the ADJ
-
             if 'color' in question_words:
-                for i, word in enumerate(sentence_words):
-                    if sentence_tags[i] == 'AUX': # check that the word is tagged as AUX
-                        if i + 1 < len(sentence_words) and sentence_tags[i + 1] == 'ADJ': # check if the previous word is a noun
-                            return sentence_words[i + 1]  # return the noun BEFORE the AUX
-
+                for word, tag in zip(sentence_words, sentence_tags):
+                    if tag in ['ADJ']:
+                        return word
             elif 'name' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag in ['PROPN']:
                         return word
-
             else:
-                verb_indices = [i for i, tag in enumerate(sentence_tags) if tag == 'VERB']
-                if verb_indices:
-                    # Return the noun that comes before the verb in the sentence.
-                    for word, tag in zip(reversed(sentence_words[:verb_indices[0]]), reversed(sentence_tags[:verb_indices[0]])):
-                        if tag == 'NOUN':
-                            return word
-                        
                 for i, word in enumerate(sentence_words):
                     if word_tags.get(word, '') in ['ADJ', 'PROPN'] and word in question_words:
                         if i + 1 < len(sentence_words) and word_tags.get(sentence_words[i+1], '').lower() == 'noun':
@@ -657,38 +640,49 @@ class SentenceReadingAgent:
                             return sentence_words[i + 1]
                         else:
                             return word
-                    
+        
+        if question_type == 'where':
+            if 'of' in sentence_words:
+                for i, word in enumerate(sentence_words):
+                    if word.lower() == 'of':
+                        if i > 0:
+                            return sentence_words[i - 1]
+            else:
+                for word, tag in zip(sentence_words, sentence_tags):
+                    if tag in ['NOUN', 'PROPN']:
+                        if 'place' in word_tags.get(word, ''):
+                            return word
+                        elif 'city' in word.lower():
+                            return word
+                        elif 'room' in word.lower():
+                            return word
                 
                         
         elif question_type == 'how':
-            # If the question is "how long", return the adjective.
+            # If the question is a "how long" type, return the adjective modifier in the sentence.
             if 'long' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag == 'ADJ':
                         return word
-            # If the question is "how far", return the noun.
+            # If the question is a "how far" type, return the noun phrase adverbial modifier in the sentence.
             elif 'far' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag == 'NOUN':
                         return word
-            # If the question is "how many" type, return the number.
-            elif 'many' in question_words:
-                for word, tag in zip(sentence_words, sentence_tags):
-                    if tag == 'NUM':
-                        return word
-            # If the question is "how"  with "do" but without "at"
+            # If the question is a "how" type with "do" but without "at"
             elif 'do' in question_words and 'at' not in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag == 'VERB':
                         return word
                     
         elif question_type == 'at':
-        # If the question is "at" , find a time.
+        # If the question is an "at" type, try to find a time format in the sentence.
             time_match = re.search(r'\b\d{1,2}:\d{2}(AM|PM)?\b', sentence)
             if time_match:
                 return time_match.group()
 
         else:
+            # If we can't determine the type of the question, return 'I don't know'
             answer = 'I dont know'
             
         return answer

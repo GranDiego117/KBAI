@@ -1,0 +1,15 @@
+and: CCONJ
+walk: VERB
+one: NUM
+mile: NOUN
+to: PART
+go: VERB
+school: NOUN
+every: DET
+day: NOUN
+at: ADP
+when: SCONJ
+there: PRON
+is: VERB
+no: DET
+snow: NOUN
