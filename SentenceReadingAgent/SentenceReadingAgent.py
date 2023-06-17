@@ -1,4 +1,5 @@
 import re
+import time
 
 class SentenceReadingAgent:
     def __init__(self):
@@ -538,7 +539,7 @@ class SentenceReadingAgent:
         # two strings as input: sentence and question. It should
         # return a string representing the answer to the question.
         # Load word classifications from file
-
+        start_time = time.time()
         word_tags = self.word_tags
 
         # Sentence and Question preprocessing
@@ -551,10 +552,10 @@ class SentenceReadingAgent:
         sentence_tags = [tag for tag in sentence_tags]  
 
         # Check for time in sentence and add the tag "TIME"
-        time_in_sentence = re.search(r'\b\d{1,2}:\d{2}(AM|PM)?\b', sentence)
-        if time_in_sentence:
-            time_index = sentence_words.index(time_in_sentence.group())
-            sentence_tags[time_index] = 'TIME'
+        time_words = re.search(r'\b\d{1,2}:\d{2}(AM|PM)?\b', sentence)
+        if time_words:
+            index = sentence_words.index(time_words.group())
+            sentence_tags[index] = 'TIME'
 
         # Identify the type of question
         question_words = question.split()
@@ -581,82 +582,92 @@ class SentenceReadingAgent:
             if ('did' in question_words or 'does' in question_words) and 'to' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag in ['PROPN'] and word.lower() not in question_words:
+                        elapsed_time = time.time() - start_time
+                        print(question_type, " time: ", elapsed_time)
                         return word
 
             # Identify if the sentence has another verb
-            sentence_verb = [word for word in sentence_words if word_tags.get(word, '') == 'VERB']
-            if sentence_verb:
-                verb_index_in_sentence = sentence_words.index(sentence_verb[0])
+            verb = [word for word in sentence_words if word_tags.get(word, '') == 'VERB']
+            if verb:
+                verb_index = sentence_words.index(verb[0])
 
                 # If the question includes "was", return the NOUN or PROPN that comes after the verb in the sentence.
                 if 'was' in question_words:
-                    for word, tag in zip(sentence_words[verb_index_in_sentence+1:], sentence_tags[verb_index_in_sentence+1:]):
+                    for word, tag in zip(sentence_words[verb_index+1:], sentence_tags[verb_index+1:]):
                         if tag in ['PROPN', 'NOUN']:
+                            elapsed_time = time.time() - start_time
+                            print(question_type," time: ", elapsed_time)
                             return word
                         
                 else:
-                    for word, tag in zip(reversed(sentence_words[:verb_index_in_sentence]), reversed(sentence_tags[:verb_index_in_sentence])):
+                    for word, tag in zip(reversed(sentence_words[:verb_index]), reversed(sentence_tags[:verb_index])):
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return word
                     
 
         if question_type == 'where':
-            # Check if there is a particle (PART) in the sentence
-            part_indices = [index for index, tag in enumerate(sentence_tags) if tag == 'PART']
-            if part_indices:
-                # Return the first noun that appears after the last particle
-                for word, tag in zip(sentence_words[part_indices[-1]+1:], sentence_tags[part_indices[-1]+1:]):
+            # Check if there is a (PART) in the sentence
+            part_index = [index for index, tag in enumerate(sentence_tags) if tag == 'PART']
+            if part_index:
+                # Return the first noun
+                for word, tag in zip(sentence_words[part_index[-1]+1:], sentence_tags[part_index[-1]+1:]):
                     if tag == 'NOUN':
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return word
 
             # check if there is an adposition (ADP) in the sentence
-            adp_indices = [index for index, tag in enumerate(sentence_tags) if tag == 'ADP']
-            if adp_indices:
+            adp_index = [index for index, tag in enumerate(sentence_tags) if tag == 'ADP']
+            if adp_index:
                 # Return the first noun that appears after the last adposition, unless the adposition is "of"
-                for index in reversed(adp_indices):
+                for index in reversed(adp_index):
                     if sentence_words[index].lower() == 'of':
                         if index > 0 and sentence_tags[index - 1] == 'NOUN':
+                            elapsed_time = time.time() - start_time
+                            print(question_type," time: ", elapsed_time)
                             return sentence_words[index - 1]
                     else:
                         for word, tag in zip(sentence_words[index+1:], sentence_tags[index+1:]):
                             if tag == 'NOUN':
+                                elapsed_time = time.time() - start_time
+                                print(question_type," time: ", elapsed_time)
                                 return word
-
-                        
 
         if question_type == 'what':
             for i, word in enumerate(sentence_words):
                 if (word in question_words or sentence_tags[i] == 'ADJ'): # check that the word is in the question or tagged as ADJ
                     if i + 1 < len(sentence_words) and sentence_tags[i + 1] == 'NOUN':
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return sentence_words[i + 1]  # return the noun AFTER the ADJ
 
             if 'color' in question_words:
                 for i, word in enumerate(sentence_words):
                     if sentence_tags[i] == 'AUX': # check that the word is tagged as AUX
                         if i + 1 < len(sentence_words) and sentence_tags[i + 1] == 'ADJ': # check if the previous word is a noun
+                            elapsed_time = time.time() - start_time
+                            print(question_type," time: ", elapsed_time)
                             return sentence_words[i + 1]  # return the noun BEFORE the AUX
 
             elif 'name' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag in ['PROPN']:
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return word
 
             else:
-                verb_indices = [i for i, tag in enumerate(sentence_tags) if tag == 'VERB']
-                if verb_indices:
+                verb_index = [i for i, tag in enumerate(sentence_tags) if tag == 'VERB']
+                if verb_index:
                     # Return the noun that comes before the verb in the sentence.
-                    for word, tag in zip(reversed(sentence_words[:verb_indices[0]]), reversed(sentence_tags[:verb_indices[0]])):
+                    for word, tag in zip(reversed(sentence_words[:verb_index[0]]), reversed(sentence_tags[:verb_index[0]])):
                         if tag == 'NOUN':
+                            elapsed_time = time.time() - start_time
+                            print(question_type," time: ", elapsed_time)
                             return word
                         
-                for i, word in enumerate(sentence_words):
-                    if word_tags.get(word, '') in ['ADJ', 'PROPN'] and word in question_words:
-                        if i + 1 < len(sentence_words) and word_tags.get(sentence_words[i+1], '').lower() == 'noun':
-                            return sentence_words[i + 1]
-                    elif word_tags.get(word, '') in ['NOUN']:
-                        if i + 1 < len(sentence_words) and word_tags.get(sentence_words[i+1], '').lower() == 'noun':
-                            return sentence_words[i + 1]
-                        else:
-                            return word
+   
                     
                 
                         
@@ -665,30 +676,42 @@ class SentenceReadingAgent:
             if 'long' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag == 'ADJ':
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return word
             # If the question is "how far", return the noun.
             elif 'far' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag == 'NOUN':
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return word
             # If the question is "how many" type, return the number.
             elif 'many' in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag == 'NUM':
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return word
             # If the question is "how"  with "do" but without "at"
             elif 'do' in question_words and 'at' not in question_words:
                 for word, tag in zip(sentence_words, sentence_tags):
                     if tag == 'VERB':
+                        elapsed_time = time.time() - start_time
+                        print(question_type," time: ", elapsed_time)
                         return word
                     
         elif question_type == 'at':
         # If the question is "at" , find a time.
             time_match = re.search(r'\b\d{1,2}:\d{2}(AM|PM)?\b', sentence)
             if time_match:
+                elapsed_time = time.time() - start_time
+                print(question_type," time: ", elapsed_time)
                 return time_match.group()
 
         else:
+            elapsed_time = time.time() - start_time
+            print(question_type," time: ", elapsed_time)
             answer = 'I dont know'
             
         return answer

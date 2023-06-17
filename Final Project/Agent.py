@@ -98,7 +98,7 @@ class Agent:
             # Load the image file.
             image_path = figure.visualFilename
             #image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-            image = cv2.imread(image_path)
+            image = cv2.imread(image_path, )
 
             # Check if image is loaded properly
             if image is None:
@@ -112,8 +112,153 @@ class Agent:
             elif name.isdigit():
                 option_images[name] = image
 
+        #if problem is 3x3
+        if problem.problemType == "3x3":
+
+            A = problem_images.get('A')
+            B = problem_images.get('B')
+            C = problem_images.get('C')
+            D = problem_images.get('D')
+            E = problem_images.get('E')
+            F = problem_images.get('F')
+            G = problem_images.get('G')
+            H = problem_images.get('H')
+
+            
+
+            A_b_pixels = np.sum(A == 0)
+            A_w_pixels = np.sum(A == 255)
+            B_b_pixels = np.sum(B == 0)
+            B_w_pixels = np.sum(B == 255)
+            C_b_pixels = np.sum(C == 0)
+            C_w_pixels = np.sum(C == 255)
+            D_b_pixels = np.sum(D == 0)
+            D_w_pixels = np.sum(D == 255)
+            E_b_pixels = np.sum(E == 0)
+            E_w_pixels = np.sum(E == 255)
+            F_b_pixels = np.sum(F == 0)
+            F_w_pixels = np.sum(F == 255)
+            G_b_pixels = np.sum(G == 0)
+            G_w_pixels = np.sum(G == 255)
+            H_b_pixels = np.sum(H == 0)
+            H_w_pixels = np.sum(H == 255)
+
+            print("Problem: ", image_path)
+            print("A Black Pixel: ", A_b_pixels, " B Black Pixel: ", B_b_pixels, " C Black Pixel: ", C_b_pixels)
+            print("D Black Pixel: ", D_b_pixels, " E Black Pixel: ", E_b_pixels, " F Black Pixel: ", F_b_pixels)
+            print("G Black Pixel: ", G_b_pixels, " H Black Pixel: ", H_b_pixels)
+
+            print("A White Pixel: ", A_w_pixels, " B White Pixel: ", B_w_pixels, " C White Pixel: ", C_w_pixels)
+            print("D White Pixel: ", D_w_pixels, " E White Pixel: ", E_w_pixels, " F White Pixel: ", F_w_pixels)
+            print("G White Pixel: ", G_w_pixels, " H White Pixel: ", H_w_pixels)
+
+
+            contours_A, hierarchy_A = process_image(A)
+            contours_B, hierarchy_B = process_image(B)
+            contours_C, hierarchy_C = process_image(C)
+            contours_D, hierarchy_D = process_image(D)
+            contours_E, hierarchy_E = process_image(E)
+            contours_F, hierarchy_F = process_image(F)
+            contours_G, hierarchy_G = process_image(G)
+            contours_H, hierarchy_H = process_image(H)
+
+            # Collect black and white pixel counts in lists for A through H
+            black_pixels = [A_b_pixels, B_b_pixels, C_b_pixels, D_b_pixels, E_b_pixels, F_b_pixels, G_b_pixels, H_b_pixels]
+            white_pixels = [A_w_pixels, B_w_pixels, C_w_pixels, D_w_pixels, E_w_pixels, F_w_pixels, G_w_pixels, H_w_pixels]
+
+            def find_pattern(tolerance=500):
+                # Check case 1: A = B = C
+                if abs(black_pixels[0] - black_pixels[1]) <= tolerance and abs(black_pixels[1] - black_pixels[2]) <= 10 \
+                        and abs(white_pixels[0] - white_pixels[1]) <= tolerance and abs(white_pixels[1] - white_pixels[2]) <= 10:
+                    return 1
+
+                # Check case 2: uniform increase or decrease
+                if abs((black_pixels[1] - black_pixels[0]) - (black_pixels[2] - black_pixels[1])) <= tolerance \
+                        and abs((white_pixels[1] - white_pixels[0]) - (white_pixels[2] - white_pixels[1])) <= tolerance:
+                    return 2
+
+                # Check case 3: doubling/halving (C = 2A)
+                if abs(black_pixels[2] - 2 * black_pixels[0]) <= tolerance and abs(white_pixels[2] - 2 * white_pixels[0]) <= tolerance:
+                    return 3
+
+                # Check case 4: tripling (C = 3A)
+                if abs(black_pixels[2] - 3 * black_pixels[0]) <= tolerance and abs(white_pixels[2] - 3 * white_pixels[0]) <= tolerance:
+                    return 4
+
+                # Check case 5: one or two values are significantly different from the others
+                mean_black_pixels = sum(black_pixels) / len(black_pixels)
+                mean_white_pixels = sum(white_pixels) / len(white_pixels)
+                black_outliers = [p for p in black_pixels if abs(p - mean_black_pixels) > tolerance]
+                white_outliers = [p for p in white_pixels if abs(p - mean_white_pixels) > tolerance]
+                if len(black_outliers) <= 2 and len(white_outliers) <= 2:
+                    return 5
+
+                # Check case 6: C = 1.5B, F = 1.5E, etc.
+                if abs(black_pixels[2] - 1.5 * black_pixels[1]) <= tolerance and abs(white_pixels[2] - 1.5 * white_pixels[1]) <= tolerance \
+                        and abs(black_pixels[5] - 1.5 * black_pixels[4]) <= tolerance and abs(white_pixels[5] - 1.5 * white_pixels[4]) <= tolerance:
+                    return 6
+
+                # If none of the above cases matched, return 7
+                return 7
+            
+            pattern = find_pattern()
+            print(f'Matched pattern: {pattern}')
+                    
+            best_option = -1
+            
+            operation = []
+
+            for option, I in option_images.items():
+                I_b_pixels = np.sum(I == 0)                
+                print("Option:", option)
+
+                if pattern == 1:  # A = B = C
+                    print(" H_b_pixels = ", H_b_pixels, I_b_pixels, H_b_pixels - I_b_pixels, option)
+                    operation.append(H_b_pixels - I_b_pixels)
+                    
+                elif pattern == 2:  # Steady increase
+                    increase = (black_pixels[1] - black_pixels[0] + black_pixels[2] - black_pixels[1] + black_pixels[5] - black_pixels[4] + black_pixels[4] - black_pixels[3] + black_pixels[7] - black_pixels[6]) / 5
+                    print(" H_b_pixels = ", H_b_pixels, increase, I_b_pixels, option, abs(I_b_pixels - (H_b_pixels + increase)))
+                    operation.append(abs(I_b_pixels - (H_b_pixels + increase)))
+                    
+                    
+                elif pattern == 3:  # C = 2A
+                    print(" H_b_pixels = ", I_b_pixels, G_b_pixels, I_b_pixels/G_b_pixels)
+                    operation .append(abs(I_b_pixels / G_b_pixels ) <= 2.1 and abs(I_b_pixels / G_b_pixels ))
+        
+                else:
+                    print("no option")
+                
+            # Find the minimum operation value and corresponding option
+            min_operation = float('inf')
+            max_operation = float('-inf')
+
+            if pattern != 3:
+                for option, value in zip(option_images.keys(), operation):
+                    if value >= 0 and value < min_operation:
+                        best_option = option
+                        min_operation = value
+                print("Best option:", best_option)
+                return int(best_option)
+            
+            if pattern == 3:
+                for option, value in zip(option_images.keys(), operation):
+                    if value >= 0 and value > max_operation:
+                        best_option = option
+                        max_operation = value
+                print("Best option:", best_option)
+                return int(best_option)
+                                
+            return -1
+
+
+            
+
+            
+            #print('This is a 3x3 problem')
+
         # If problem is 2x2
-        if problem.problemType == "2x2":
+        elif problem.problemType == "2x2":
             # Extract the individual images
             # Extract the individual images
             A = problem_images.get('A')
@@ -407,9 +552,7 @@ class Agent:
             #input("Press Enter to continue...")
 
 
-        # If problem is 3x3
-        #elif problem.problemType == "3x3":
-            #print('This is a 3x3 problem')
+        
 
 
         #print("Path: ", image_path, " type: ", problem_type, " visual: ", problem_hasVisual, " verbal: ", problem_hasVerbal)
