@@ -9,10 +9,9 @@
 # These methods will be necessary for the project's main method to run.
 # 
 # Install Pillow and uncomment this line to access image processing.
+from PIL import Image, ImageChops, ImageFont, ImageDraw
 import numpy as np
 import cv2
-import time
-
 
 
 class Agent:
@@ -34,7 +33,6 @@ class Agent:
     # Make sure to return your answer *as an integer* at the end of Solve().
     # Returning your answer as a string may cause your program to crash.
     def Solve(self,problem):
-        start_time = time.time()
 
         def process_image(image):
             # Convert the image to grayscale and binary
@@ -46,37 +44,37 @@ class Agent:
         
         def apply_transformation(image, transformation):
             if transformation == 0:  # change
-                #print("|| Transformation = Change")
+                print("|| Transformation = Change")
                 return image
             elif transformation == 1:  # horizontal
-                #print("|| Transformation = Horizontal")
+                print("|| Transformation = Horizontal")
                 image = cv2.flip(image, 1)
             elif transformation == 2:  # vertical
-                #print("|| Transformation = Vertical")
+                print("|| Transformation = Vertical")
                 image = cv2.flip(image, 0)
             elif transformation == 3:  # rotation_90
-                #print("|| Transformation = rotation 90")
+                print("|| Transformation = rotation 90")
                 image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE )
             elif transformation == 4:  # rotation_180
-                #print("|| Transformation = rotation 180")
+                print("|| Transformation = rotation 180")
                 image = cv2.rotate(image, cv2.ROTATE_180)
             elif transformation == 5:  # rotation_270
-                #print("|| Transformation = rotation 270")
+                print("|| Transformation = rotation 270")
                 image = cv2.rotate(image,  cv2.ROTATE_90_COUNTERCLOCKWISE) 
             return image
         
-        # Function to detect and #print the number of edges for each figure in an image
+        # Function to detect and print the number of edges for each figure in an image
         def figure_edges(contours, image_name):
             edges_count = []
-            #print(f"Figures in {image_name}:")
+            print(f"Figures in {image_name}:")
             for i, contour in enumerate(contours):
                 epsilon = 0.02 * cv2.arcLength(contour, True)
                 approx = cv2.approxPolyDP(contour, epsilon, True)
                 num_edges = len(approx)
-                #print(f"Figure {i+1}: {num_edges} edges")
+                print(f"Figure {i+1}: {num_edges} edges")
                 # Count the number of edges
                 edges_count.append(len(approx))         
-            
+
             return edges_count
         
 
@@ -92,6 +90,7 @@ class Agent:
         best_success_count = 0
 
         # Tolerance in pixels for image differences
+        #tolerance = 500000
         tolerance = 800000
 
         # Loop over each figure in the problem.
@@ -103,7 +102,7 @@ class Agent:
 
             # Check if image is loaded properly
             if image is None:
-                #print(f"Error loading image {image_path}")
+                print(f"Error loading image {image_path}")
                 continue  # Skip this iteration and go to next figure
 
             # If the name is a letter, add it to the problem images. 
@@ -125,32 +124,27 @@ class Agent:
             G = problem_images.get('G')
             H = problem_images.get('H')
 
+            # Define a minimum size (in pixels) for a figure to be considered
+            min_size = 1  # Adjust this value according to your needs
+
             # Initialize a dictionary to store the report for each image
             image_info = {}
-
-            def figure_matches(image1, image2, tolerance):
-                for figure1 in image1['total_pixels']:
-                    for figure2 in image2['total_pixels']:
-                        if abs(figure1 - figure2) <= tolerance:
-                            return True
-                return False
-            
-            def similar_pixel_counts(pixels1, pixels2, tolerance):
-                if len(pixels1) != len(pixels2):
-                    return False
-                return all(abs(p1 - p2) <= tolerance for p1, p2 in zip(sorted(pixels1), sorted(pixels2)))
-
 
             # For each image in the dictionary
             for name, img in problem_images.items():
                 # Ensure image is grayscale
-                if len(img.shape) > 2:
+                if len(img.shape) > 2:  # i.e. has more than one channel
                     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                     
+               # Threshold the image
                 _, img_bin = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY_INV)
 
                 # Find connected components in the binary image
                 num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(img_bin, connectivity=8)
+
+                # Store figure info for the current image
+                # Get the pixels count for each figure (excluding background which is the first label)
+                # Store the figure info for the current image
                             
                  # Store figure info for the current option
                 figures_info = {"figures_count": num_labels - 1, "total_pixels": []}
@@ -159,276 +153,358 @@ class Agent:
                 for i in range(1, num_labels):
                     figure_pixels = np.sum(labels == i)
                     figures_info["total_pixels"].append(figure_pixels)
-                    ##print(f"Figure {i} in {name} has {figure_pixels} black pixels")
+                    #print(f"Figure {i} in {name} has {figure_pixels} black pixels")
 
+                # Store the figure info for the current image
                 image_info[name] = figures_info 
             
+            # Step 1: Compare number of figures in the images
+            figures_counts = [info["figures_count"] for info in image_info.values()]
 
-            #print("=========================")
-            #print(image_path)
+            print("=========================")
+            print(image_path)
 
             # Initialize the result dictionary
             results = {}
 
-            # 1. Compare A, B, and C
-            ABC_same = image_info['A']['figures_count'] == image_info['B']['figures_count'] == image_info['C']['figures_count'] and \
-                        similar_pixel_counts(image_info['A']['total_pixels'], image_info['B']['total_pixels'], 100)
+            # Compare the number of figures between A, B, and C
+            AB_same = image_info['A']['figures_count'] == image_info['B']['figures_count']
+            BC_same = image_info['B']['figures_count'] == image_info['C']['figures_count']
+            AB_less = image_info['A']['figures_count'] < image_info['B']['figures_count']
+            BC_less = image_info['B']['figures_count'] < image_info['C']['figures_count']
+            AB_more = image_info['A']['figures_count'] > image_info['B']['figures_count']
+            BC_more = image_info['B']['figures_count'] > image_info['C']['figures_count']
 
+            results['ABC'] = {
+                'AB_same': AB_same and not BC_same,
+                'ABC_same': AB_same and BC_same,
+                'AB_less_BC_more': AB_less and BC_more,
+                'ABC_increasing': AB_less and BC_less,
+                'AB_more_BC_less': AB_more and BC_less,
+                'ABC_decreasing': AB_more and BC_more
+            }
+            
+            # Compare the number of figures between A, D, and G
+            AD_same = image_info['A']['figures_count'] == image_info['D']['figures_count']
+            DG_same = image_info['D']['figures_count'] == image_info['G']['figures_count']
+            AD_less = image_info['A']['figures_count'] < image_info['D']['figures_count']
+            DG_less = image_info['D']['figures_count'] < image_info['G']['figures_count']
+            AD_more = image_info['A']['figures_count'] > image_info['D']['figures_count']
+            DG_more = image_info['D']['figures_count'] > image_info['G']['figures_count']
+
+            results['ADG'] = {
+                'AD_same': AD_same and not DG_same,
+                'ADG_same': AD_same and DG_same,
+                'AD_less_DG_more': AD_less and DG_more,
+                'ADG_increasing': AD_less and DG_less,
+                'AD_more_DG_less': AD_more and DG_less,
+                'ADG_decreasing': AD_more and DG_more
+            }
+            
+
+            # Compare the figures in A, B, C, D, E
+            results['figures'] = []
+            for idx_a, figure_a in enumerate(image_info['A']['total_pixels'], start=1):
+                for name in ['B', 'C', 'D', 'E']:
+                    for idx, figure in enumerate(image_info[name]['total_pixels'], start=1):
+                        if abs(figure_a - figure) < 50:
+                            results['figures'].append({
+                                'figures': f'{idx_a} in A matches {idx} in {name}',
+                                'pixels_A': figure_a,
+                                'pixels_name': figure
+                            })
+
+            # Compare the figures in D, H and B, F
+            for name1, name2 in [('D', 'H'), ('B', 'F')]:
+                for idx1, figure1 in enumerate(image_info[name1]['total_pixels'], start=1):
+                    for idx2, figure2 in enumerate(image_info[name2]['total_pixels'], start=1):
+                        if abs(figure1 - figure2) < 50:
+                            results['figures'].append({
+                                'figures': f'{idx1} in {name1} matches {idx2} in {name2}',
+                                'pixels_name1': figure1,
+                                'pixels_name2': figure2
+                            })
+
+            # 1. Compare A, B, and C
+            ABC_same = image_info['A']['figures_count'] == image_info['B']['figures_count'] == image_info['C']['figures_count']
             results['ABC'] = ABC_same
 
-            # 2. Compare A, D, and G
-            ADG_same = image_info['A']['figures_count'] == image_info['D']['figures_count'] == image_info['G']['figures_count'] and \
-                        similar_pixel_counts(image_info['A']['total_pixels'], image_info['D']['total_pixels'], 100)
-
-            results['ADG'] = ADG_same
-
-            # 3. Compare A and E, and B and F
-            A_E_same = image_info['A']['figures_count'] == image_info['E']['figures_count'] and \
-                        similar_pixel_counts(image_info['A']['total_pixels'], image_info['E']['total_pixels'], 100)
-
-            B_F_same = image_info['B']['figures_count'] == image_info['F']['figures_count'] and \
-                        similar_pixel_counts(image_info['B']['total_pixels'], image_info['F']['total_pixels'], 100)
-
+            # 2. Compare A, E and B, F
+            A_E_same = image_info['A']['figures_count'] == image_info['E']['figures_count']
+            B_F_same = image_info['B']['figures_count'] == image_info['F']['figures_count']
             results['A_E_B_F'] = A_E_same and B_F_same
 
-            # 4. Check if any figure in A matches any figure in B
-            results['A_B_figure_match'] = figure_matches(image_info['A'], image_info['B'], 100)
+            # 3. Compare A, D, and G
+            ADG_same = image_info['A']['figures_count'] == image_info['D']['figures_count'] == image_info['G']['figures_count']
+            results['ADG'] = ADG_same
 
-            # 5. Check if any figure in A matches any figure in C
-            results['A_C_figure_match'] = figure_matches(image_info['A'], image_info['C'], 100)
-
-            # 6. Check if any figure in A matches any figure in D
-            results['A_D_figure_match'] = figure_matches(image_info['A'], image_info['D'], 100)
-
-            # 7. Check if any figure in A matches any figure in G
-            results['A_G_figure_match'] = figure_matches(image_info['A'], image_info['G'], 100)
-
-            # 8. Check the increase in pixels from A to B and B to C
-            increase_rate_A_B = [p2 / p1 if p1 != 0 else float('inf') for p1, p2 in zip(image_info['A']['total_pixels'], image_info['B']['total_pixels'])]
-            increase_rate_B_C = [p2 / p1 if p1 != 0 else float('inf') for p1, p2 in zip(image_info['B']['total_pixels'], image_info['C']['total_pixels'])]
-            increase_rate_G_H = [p2 / p1 if p1 != 0 else float('inf') for p1, p2 in zip(image_info['G']['total_pixels'], image_info['H']['total_pixels'])]
-            avg_increase_rate_A_C = (sum(increase_rate_A_B) + sum(increase_rate_B_C))/2
-
-
-            results['increase_rate_A_B'] = increase_rate_A_B
-            results['increase_rate_B_C'] = increase_rate_B_C
-            results['increase_rate_G_H'] = increase_rate_G_H
-            results['increase_rate_avg_B_C'] = avg_increase_rate_A_C
-            
-
-            # Calculate the pixel change from G to H
-            pixel_change_G_H = sum(image_info['H']['total_pixels']) - sum(image_info['G']['total_pixels'])
-            if pixel_change_G_H > 0:
-                pixel_change_G_H = 1
-            elif pixel_change_G_H < 0:
-                pixel_change_G_H = -1
-            else:
-                pixel_change_G_H = 0
-
-            results['pixel_change_G_H'] = pixel_change_G_H
-
-            figure_change_G_H = image_info['H']['figures_count'] - image_info['G']['figures_count']
-            if figure_change_G_H > 0:
-                figure_change_G_H = 1
-            elif figure_change_G_H < 0:
-                figure_change_G_H = -1
-            else:
-                figure_change_G_H = 0
-
-
-            # #print the results
+            # Print the results
             for key, value in results.items():
-                print("||", key, value)
-
-
-            
+                print("|||||||", key, value)
 
             for option_name, option_img in option_images.items():
-                #print("Option Name: ", option_name)
-                # Ensure image is grayscale
-                if len(option_img.shape) > 2:  
-                    option_img = cv2.cvtColor(option_img, cv2.COLOR_BGR2GRAY)
-
-                _, option_img_bin = cv2.threshold(option_img, 128, 255, cv2.THRESH_BINARY_INV)
-
-                # Find connected components in the binary image
-                num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(option_img_bin, connectivity=8)
-
-                option_info = {
-                    "figures_count": num_labels - 1,  # Subtract 1 for the background label
-                    "total_pixels": stats[1:, cv2.CC_STAT_AREA].tolist()  # Ignore the background label
-                }
-
-                # Compare the option image with the corresponding image based on the flags
-                #print("|||", option_info)
-                #print("||| H ", image_info['H']['total_pixels'])
-                #print("||| F ", image_info['F']['total_pixels'])
-                #print("||| E ", image_info['E']['total_pixels'])
-                if results['ABC'] and \
-                    option_info["figures_count"] == image_info['H']['figures_count'] and \
-                    similar_pixel_counts(option_info['total_pixels'], image_info['H']['total_pixels'], 100):
-                    #print(f'Option {option_name} matches H for the ABC flag')
-                    elapsed_time = time.time() - start_time
-                    print(" time: ", elapsed_time)
-                    return int(option_name)
-
-                if results['ADG'] and \
-                    option_info["figures_count"] == image_info['F']['figures_count'] and \
-                    similar_pixel_counts(option_info['total_pixels'], image_info['F']['total_pixels'], 100):
-                    #print(f'Option {option_name} matches F for the ADG flag')
-                    elapsed_time = time.time() - start_time
-                    print(" time: ", elapsed_time)
-                    return int(option_name)
-
-                if results['A_E_B_F'] and \
-                    option_info["figures_count"] == image_info['E']['figures_count'] and \
-                    similar_pixel_counts(option_info['total_pixels'], image_info['E']['total_pixels'], 100):
-                    #print(f'Option {option_name} matches E for the A_E_B_F flag')
-                    elapsed_time = time.time() - start_time
-                    print(" time: ", elapsed_time)
-                    return int(option_name)
-
-
-
-            for option_name, option_img in option_images.items():
-                #print("Option Name: ", option_name)
+                print("Option Name: ", option_name)
                 # Ensure image is grayscale
                 if len(option_img.shape) > 2:  # i.e. has more than one channel
                     option_img = cv2.cvtColor(option_img, cv2.COLOR_BGR2GRAY)
 
+                # Threshold the image
                 _, option_img_bin = cv2.threshold(option_img, 128, 255, cv2.THRESH_BINARY_INV)
 
                 # Find connected components in the binary image
                 num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(option_img_bin, connectivity=8)
 
-                option_info = {
-                    "figures_count": num_labels - 1,  # Subtract 1 for the background label
-                    "total_pixels": stats[1:, cv2.CC_STAT_AREA].tolist()  # Ignore the background label
-                }
+                # Calculate the figure count for the option
+                option_count = num_labels - 1
 
-                # Calculate the pixel change from option to H
-                #print(" PIXELS: ", sum(image_info['H']['total_pixels']), sum(option_info['total_pixels']))
-                pixel_change_option_H =  sum(option_info['total_pixels']) - sum(image_info['H']['total_pixels'])
-                if pixel_change_option_H > 0:
-                    pixel_change_option_H = 1
-                elif pixel_change_option_H < 0:
-                    pixel_change_option_H = -1
-                else:
-                    pixel_change_option_H = 0
+                # Compare the option to the results
+                print( " 1: ", results['ABC'])
+                print( " 2: ", results['A_E_B_F'])
+                print( " 3: ", results['ADG'])
 
-                figure_change_option_H = option_info['figures_count'] - image_info['H']['figures_count']
-                if figure_change_option_H > 0:
-                    figure_change_option_H = 1
-                elif figure_change_option_H < 0:
-                    figure_change_option_H = -1
-                else:
-                    figure_change_option_H = 0
+                if (results['ABC'] and image_info['H']['figures_count'] == option_count) or \
+                    (results['A_E_B_F'] and image_info['E']['figures_count'] == option_count) or \
+                    (results['ADG'] and image_info['F']['figures_count'] == option_count):
+                    print(f"Option {option_name} is a potential solution.")
 
-                #print(" H INFO: ", image_info['H'])
-                #print(" OPTION INFO: ", option_info)
-                #print(" Pixel Change: ", pixel_change_G_H, pixel_change_option_H, pixel_change_option_H * pixel_change_G_H)
+            print("========================================")
+            
+            input("Press Enter to continue...")
+                
+            
+            # Step 2: Compare horizontally
+            horizontal_equal = True
+            for i, figure_A in enumerate(image_info["A"]["total_pixels"]):
+                horizontal_equal = any(figure_A == figure_B for figure_B in image_info["B"]["total_pixels"][i:]) and \
+                                any(figure_A == figure_C for figure_C in image_info["C"]["total_pixels"][i:])
+                if not horizontal_equal:
+                    break
+
+            if horizontal_equal:
+                print("Horizontal equality detected")
+
+            # Step 3: Compare vertically
+            vertical_equal = True
+            for i, figure_A in enumerate(image_info["A"]["total_pixels"]):
+                vertical_equal = any(figure_A == figure_D for figure_D in image_info["D"]["total_pixels"][i:]) and \
+                                any(figure_A == figure_G for figure_G in image_info["G"]["total_pixels"][i:])
+                if not vertical_equal:
+                    break
+
+            if vertical_equal:
+                print("Vertical equality detected")
+
+            # Step 4: Compare diagonally
+            diagonal_equal = True
+            for i, figure_A in enumerate(image_info["A"]["total_pixels"]):
+                diagonal_equal = any(figure_A == figure_E for figure_E in image_info["E"]["total_pixels"][i:])
+                if not diagonal_equal:
+                    break
+
+            if diagonal_equal:
+                print("Diagonal equality detected")
+            print("=========================")
                 
 
-                # 1. if there's a match AB, AC and AD and AG -> then option should have a figure match G,H and C,F
-                if results['A_B_figure_match'] and results['A_C_figure_match'] and results['A_D_figure_match'] and results['A_G_figure_match']:
-                    if figure_matches(option_info, image_info['G'], 100) and \
-                    figure_matches(option_info, image_info['H'], 100) and \
-                    figure_matches(option_info, image_info['C'], 100) and \
-                    figure_matches(option_info, image_info['F'], 100) and \
-                    pixel_change_G_H == pixel_change_option_H and \
-                    figure_change_G_H == figure_change_option_H:
-                            #print(f'Option {option_name} matches G, H, C or F for the A_B_C_D_G_figure_match flags')
-                            elapsed_time = time.time() - start_time
-                            print(" time: ", elapsed_time)
-                            return int(option_name)
+            # Check number of pixels and number of figures A = B = C
+            if image_info['A'] == image_info['B'] == image_info['C']:
+                ABC_equal = True
+                print("A = B = C")
+            else:
+                ABC_equal = False
 
-                # 2. if there's a match AC and AG -> then option should have a figure match G and C
-                if results['A_C_figure_match'] and results['A_G_figure_match']:
-                    if figure_matches(option_info, image_info['G'], 100) and \
-                    figure_matches(option_info, image_info['C'], 100) and \
-                    pixel_change_G_H == pixel_change_option_H and \
-                    figure_change_G_H == figure_change_option_H:
-                        #print(f'Option {option_name} matches G or C for the A_C_G_figure_match flags')
-                        elapsed_time = time.time() - start_time
-                        print(" time: ", elapsed_time)
-                        return int(option_name)
+            # Check number of pixels and number of figured A = D = G
+            if image_info['A'] == image_info['D'] == image_info['G']:
+                ADG_equal = True
+                print("A = D = G")
+            else:
+                ADG_equal = False
 
-                if results['ABC'] and \
-                    option_info["figures_count"] == image_info['H']['figures_count'] and \
-                    similar_pixel_counts(option_info['total_pixels'], image_info['H']['total_pixels'], 100) and \
-                    pixel_change_G_H == pixel_change_option_H and \
-                    figure_change_G_H == figure_change_option_H:
-                        #print(f'Option {option_name} matches H for the ABC flag')
-                        elapsed_time = time.time() - start_time
-                        print(" time: ", elapsed_time)
-                        return int(option_name)
-                
-                if results['ADG'] and \
-                    option_info["figures_count"] == image_info['F']['figures_count'] and \
-                    similar_pixel_counts(option_info['total_pixels'], image_info['F']['total_pixels'], 100) and \
-                    pixel_change_G_H == pixel_change_option_H and \
-                    figure_change_G_H == figure_change_option_H:
-                        #print(f'Option {option_name} matches F for the ADG flag')
-                        elapsed_time = time.time() - start_time
-                        print(" time: ", elapsed_time)
-                        return int(option_name)
+            # Check number of pixels and number of figures A = E, and B = F
+            if image_info['A'] == image_info['E'] and image_info['B'] == image_info['F']:
+                AE_BF_equal = True
+                print("A = E and B = F")
+            else:
+                AE_BF_equal = False
 
-                if results['A_E_B_F'] and \
-                    option_info["figures_count"] == image_info['E']['figures_count'] and \
-                    similar_pixel_counts(option_info['total_pixels'], image_info['E']['total_pixels'], 100) and \
-                    pixel_change_G_H == pixel_change_option_H and \
-                    figure_change_G_H == figure_change_option_H:
-                        #print(f'Option {option_name} matches E for the A_E_B_F flag')
-                        elapsed_time = time.time() - start_time
-                        print(" time: ", elapsed_time)
-                        return int(option_name)
-                
-                #print("///////////////////", results['A_C_figure_match'], results['A_G_figure_match'])
-                if results['A_C_figure_match'] and results['A_G_figure_match'] and\
-                    option_info["figures_count"] == image_info['A']['figures_count'] and \
-                    similar_pixel_counts(option_info['total_pixels'], image_info['A']['total_pixels'], 100):
-                        #print(f'Option {option_name} matches A for the A_C and AG_G flag')
-                        elapsed_time = time.time() - start_time
-                        print(" time: ", elapsed_time)
-                        return int(option_name)
-                
+            # Store figure info for each option in a dictionary
+            option_info = {}
 
-            option_increase_rates = {}
-
-            for option_name, option_img in option_images.items():
-                #print("Option Name: ", option_name)
+            # For each option in the dictionary
+            for name, img in option_images.items():
                 # Ensure image is grayscale
-                if len(option_img.shape) > 2:  
-                    option_img = cv2.cvtColor(option_img, cv2.COLOR_BGR2GRAY)
-
-                _, option_img_bin = cv2.threshold(option_img, 128, 255, cv2.THRESH_BINARY_INV)
+                if len(img.shape) > 2:  # i.e. has more than one channel
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                
+                # Threshold the image
+                _, img_bin = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY_INV)
 
                 # Find connected components in the binary image
-                num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(option_img_bin, connectivity=8)
+                num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(img_bin, connectivity=8)
 
-                option_info = {
-                    "figures_count": num_labels - 1,  # Subtract 1 for the background label
-                    "total_pixels": stats[1:, cv2.CC_STAT_AREA].tolist()  # Ignore the background label
-                }
+                # Store figure info for the current option
+                figures_info = {"figures_count": num_labels - 1, "total_pixels": []}
 
-                increase_rate_H_Option = [p2 / p1 if p1 != 0 else float('inf') for p1, p2 in zip(image_info['H']['total_pixels'], option_info['total_pixels'])]
-                #print("Increase H_Opt: ", increase_rate_H_Option )
+                # Process each figure (skip 0 because it is the background)
+                for i in range(1, num_labels):
+                    figure_pixels = np.sum(labels == i)
+                    figures_info["total_pixels"].append(figure_pixels)
+                    print(f"Figure {i} in {name} has {figure_pixels} black pixels")
 
-                diff = np.abs(np.mean(increase_rate_H_Option) - np.mean(increase_rate_G_H))
+                # Store the figure info for the current option
+                option_info[name] = figures_info
 
-                option_increase_rates[option_name] = (increase_rate_H_Option, diff)
-            
-            # Find the option with the closest increase rate
-            best_option = min(option_increase_rates, key=lambda x: option_increase_rates[x][1])
-            #print("BEST OPTION: ", best_option)
-            elapsed_time = time.time() - start_time
-            print(" time: ", elapsed_time)
-            return int(best_option)
-
-           # #print("========================================")            
-           # input("Press Enter to continue...")
+            # Loop through all options and check which one matches the pattern
+            for option, info in option_info.items():
+                print("Option:", option)
+                print(f"Figure: {figure_pixels} total black pixels")
                 
+                print("H", image_info["H"])
+                print("F", image_info["F"])
+                print("E", image_info["E"])
+#                if ABC_equal and np.allclose(np.array(list(info.values())), np.array(list(image_info["H"].values())), atol=100):
+#                    print(f"Option {option} matches the pattern of ABC.")
+#                    return int(option)
+#                elif ADG_equal and np.allclose(np.array(list(info.values())), np.array(list(image_info["F"].values())), atol=100):
+#                    print(f"Option {option} matches the pattern of ADG.")
+#                    return int(option)
+#                elif AE_BF_equal and np.allclose(np.array(list(info.values())), np.array(list(image_info["E"].values())), atol=100):
+##                    print(f"Option {option} matches the pattern of AE and BF.")
+#                    return int(option)
+
+        
+
+            A_b_pixels = np.sum(A == 0)
+            A_w_pixels = np.sum(A == 255)
+            B_b_pixels = np.sum(B == 0)
+            B_w_pixels = np.sum(B == 255)
+            C_b_pixels = np.sum(C == 0)
+            C_w_pixels = np.sum(C == 255)
+            D_b_pixels = np.sum(D == 0)
+            D_w_pixels = np.sum(D == 255)
+            E_b_pixels = np.sum(E == 0)
+            E_w_pixels = np.sum(E == 255)
+            F_b_pixels = np.sum(F == 0)
+            F_w_pixels = np.sum(F == 255)
+            G_b_pixels = np.sum(G == 0)
+            G_w_pixels = np.sum(G == 255)
+            H_b_pixels = np.sum(H == 0)
+            H_w_pixels = np.sum(H == 255)
+
+            print("Problem: ", image_path)
+            print("A Black Pixel: ", A_b_pixels, " B Black Pixel: ", B_b_pixels, " C Black Pixel: ", C_b_pixels)
+            print("D Black Pixel: ", D_b_pixels, " E Black Pixel: ", E_b_pixels, " F Black Pixel: ", F_b_pixels)
+            print("G Black Pixel: ", G_b_pixels, " H Black Pixel: ", H_b_pixels)
+
+            print("A White Pixel: ", A_w_pixels, " B White Pixel: ", B_w_pixels, " C White Pixel: ", C_w_pixels)
+            print("D White Pixel: ", D_w_pixels, " E White Pixel: ", E_w_pixels, " F White Pixel: ", F_w_pixels)
+            print("G White Pixel: ", G_w_pixels, " H White Pixel: ", H_w_pixels)
+
+
+            contours_A, hierarchy_A = process_image(A)
+            contours_B, hierarchy_B = process_image(B)
+            contours_C, hierarchy_C = process_image(C)
+            contours_D, hierarchy_D = process_image(D)
+            contours_E, hierarchy_E = process_image(E)
+            contours_F, hierarchy_F = process_image(F)
+            contours_G, hierarchy_G = process_image(G)
+            contours_H, hierarchy_H = process_image(H)
+
+            # Collect black and white pixel counts in lists for A through H
+            black_pixels = [A_b_pixels, B_b_pixels, C_b_pixels, D_b_pixels, E_b_pixels, F_b_pixels, G_b_pixels, H_b_pixels]
+            white_pixels = [A_w_pixels, B_w_pixels, C_w_pixels, D_w_pixels, E_w_pixels, F_w_pixels, G_w_pixels, H_w_pixels]
+
+            def find_pattern(tolerance=500):
+                # Check case 1: A = B = C
+                if abs(black_pixels[0] - black_pixels[1]) <= tolerance and abs(black_pixels[1] - black_pixels[2]) <= 10 \
+                        and abs(white_pixels[0] - white_pixels[1]) <= tolerance and abs(white_pixels[1] - white_pixels[2]) <= 10:
+                    return 1
+
+                # Check case 2: uniform increase or decrease
+                if abs((black_pixels[1] - black_pixels[0]) - (black_pixels[2] - black_pixels[1])) <= tolerance \
+                        and abs((white_pixels[1] - white_pixels[0]) - (white_pixels[2] - white_pixels[1])) <= tolerance:
+                    return 2
+
+                # Check case 3: doubling/halving (C = 2A)
+                if abs(black_pixels[2] - 2 * black_pixels[0]) <= tolerance and abs(white_pixels[2] - 2 * white_pixels[0]) <= tolerance:
+                    return 3
+
+                # Check case 4: tripling (C = 3A)
+                if abs(black_pixels[2] - 3 * black_pixels[0]) <= tolerance and abs(white_pixels[2] - 3 * white_pixels[0]) <= tolerance:
+                    return 4
+
+                # Check case 5: one or two values are significantly different from the others
+                mean_black_pixels = sum(black_pixels) / len(black_pixels)
+                mean_white_pixels = sum(white_pixels) / len(white_pixels)
+                black_outliers = [p for p in black_pixels if abs(p - mean_black_pixels) > tolerance]
+                white_outliers = [p for p in white_pixels if abs(p - mean_white_pixels) > tolerance]
+                if len(black_outliers) <= 2 and len(white_outliers) <= 2:
+                    return 5
+
+                # Check case 6: C = 1.5B, F = 1.5E, etc.
+                if abs(black_pixels[2] - 1.5 * black_pixels[1]) <= tolerance and abs(white_pixels[2] - 1.5 * white_pixels[1]) <= tolerance \
+                        and abs(black_pixels[5] - 1.5 * black_pixels[4]) <= tolerance and abs(white_pixels[5] - 1.5 * white_pixels[4]) <= tolerance:
+                    return 6
+
+                # If none of the above cases matched, return 7
+                return 7
             
+            pattern = find_pattern()
+            print(f'Matched pattern: {pattern}')
+                    
+            best_option = -1
+            
+            operation = []
+
+            for option, I in option_images.items():
+                I_b_pixels = np.sum(I == 0)                
+                print("Option:", option)
+
+                if pattern == 1:  # A = B = C
+                    print(" H_b_pixels = ", H_b_pixels, I_b_pixels, H_b_pixels - I_b_pixels, option)
+                    operation.append(H_b_pixels - I_b_pixels)
+                    
+                elif pattern == 2:  # Steady increase
+                    increase = (black_pixels[1] - black_pixels[0] + black_pixels[2] - black_pixels[1] + black_pixels[5] - black_pixels[4] + black_pixels[4] - black_pixels[3] + black_pixels[7] - black_pixels[6]) / 5
+                    print(" H_b_pixels = ", H_b_pixels, increase, I_b_pixels, option, abs(I_b_pixels - (H_b_pixels + increase)))
+                    operation.append(abs(I_b_pixels - (H_b_pixels + increase)))
+                    
+                    
+                elif pattern == 3:  # C = 2A
+                    print(" H_b_pixels = ", I_b_pixels, G_b_pixels, I_b_pixels/G_b_pixels)
+                    operation .append(abs(I_b_pixels / G_b_pixels ) <= 2.1 and abs(I_b_pixels / G_b_pixels ))
+        
+                else:
+                    print("no option")
+                
+            # Find the minimum operation value and corresponding option
+            min_operation = float('inf')
+            max_operation = float('-inf')
+
+            if pattern != 3:
+                for option, value in zip(option_images.keys(), operation):
+                    if value >= 0 and value < min_operation:
+                        best_option = option
+                        min_operation = value
+                print("Best option:", best_option)
+                return int(best_option)
+            
+            if pattern == 3:
+                for option, value in zip(option_images.keys(), operation):
+                    if value >= 0 and value > max_operation:
+                        best_option = option
+                        max_operation = value
+                print("Best option:", best_option)
+                return int(best_option)
+                                
+            return -1
+
+
+            
+
+            
+            #print('This is a 3x3 problem')
+
         # If problem is 2x2
         elif problem.problemType == "2x2":
             # Extract the individual images
@@ -442,7 +518,7 @@ class Agent:
             contours_B, hierarchy_B = process_image(B)
             contours_C, hierarchy_C = process_image(C)
 
-            #print("Hierarchy A: ", hierarchy_A, "Hierarchy B: ", hierarchy_B)
+            print("Hierarchy A: ", hierarchy_A, "Hierarchy B: ", hierarchy_B)
 
             edgesA = figure_edges(contours_A, 'A')
             edgesB = figure_edges(contours_B, 'B')
@@ -536,7 +612,7 @@ class Agent:
                     differencesAC.append(f"Hierarchy C: {hierarchy_C[0][i]}")
                     differencesAC.append("")  # Add a blank line for separation
 
-            # #print the differences
+            # Print the differences
             if differencesAB:
                 print("Differences between Hierarchy A and Hierarchy B:")
                 for difference in differencesAB:
@@ -616,14 +692,14 @@ class Agent:
                     transformations_to_apply.append(f'Rotation by {degree} degrees between A and C')
                     transformations_to_apply_AC.append(3 + i)
 
-            #print(image_path)
-            #print('\n'.join(transformations_difference))
-            #print('\n'.join(transformations_to_apply))
+            print(image_path)
+            print('\n'.join(transformations_difference))
+            print('\n'.join(transformations_to_apply))
 
              # Try to apply the transformations from A->B to C->D and A->C to B->D
-            #print("===================================")
+            print("===================================")
             for option, D in option_images.items():
-                #print("Option:", option)
+                print("Option:", option)
                 
                 # Initialize counters for successful transformations
                 success_count_AB = 0
@@ -632,20 +708,20 @@ class Agent:
                 # Apply each transformation from A to B on image C
                 for transformation in transformations_to_apply_AB:
                     transformed_C = apply_transformation(C, transformation)
-                    #print("Transformation C->D:", transformation, "Transformation difference:", np.sum(cv2.absdiff(transformed_C, D)))
+                    print("Transformation C->D:", transformation, "Transformation difference:", np.sum(cv2.absdiff(transformed_C, D)))
 
                     if np.sum(cv2.absdiff(transformed_C, D)) < tolerance:
                         success_count_AB += 1
-                        #print("Transformation C->D:", transformation, "# of transformations analyzed:", success_count_AB)
+                        print("Transformation C->D:", transformation, "# of transformations analyzed:", success_count_AB)
 
                 # Apply each transformation from A to C on image B
                 for transformation in transformations_to_apply_AC:
                     transformed_B = apply_transformation(B, transformation)
-                    #print("Transformation B->D:", transformation, "Transformation difference:", np.sum(cv2.absdiff(transformed_B, D)))
+                    print("Transformation B->D:", transformation, "Transformation difference:", np.sum(cv2.absdiff(transformed_B, D)))
 
                     if np.sum(cv2.absdiff(transformed_B, D)) < tolerance:
                         success_count_AC += 1
-                        #print("Transformation B->D:", transformation, "# of transformations analyzed:", success_count_AC)
+                        print("Transformation B->D:", transformation, "# of transformations analyzed:", success_count_AC)
                 
                 max_success_count = max(success_count_AB, success_count_AC)
                 if max_success_count > best_success_count:
@@ -653,8 +729,8 @@ class Agent:
                     best_success_count = max_success_count
 
                 if best_option is not None:
-                   #print("Answer: ", int(option))
-                   #print("===================================")
+                   print("Answer: ", int(option))
+                   print("===================================")
                    #input("Press Enter to continue...")
                    return int(best_option)
             
@@ -662,13 +738,13 @@ class Agent:
                 contours_D, hierarchy_D = process_image(D)
                 elementsBD = len(hierarchy_B[0]) - len(hierarchy_D[0])
                 elementsCD = len(hierarchy_C[0]) - len(hierarchy_D[0])
-                #print("Option:", option)
+                print("Option:", option)
 
                 if elementsAB == elementsCD:    
-                    #print("\\\\\\\\\\\\\\\\\\\\\\\\ CD")
+                    print("\\\\\\\\\\\\\\\\\\\\\\\\ CD")
                     success_count_AB += 1
                 if elementsAC == elementsBD:        
-                    #print("\\\\\\\\\\\\\\\\\\\\\\\\ BD")
+                    print("\\\\\\\\\\\\\\\\\\\\\\\\ BD")
                     success_count_AC += 1
 
                 max_success_count = max(success_count_AB, success_count_AC)
@@ -677,13 +753,13 @@ class Agent:
                     best_success_count = max_success_count
 
                 if best_option is not None:
-                   #print("Answer: ", int(option))
-                   #print("===================================")
+                   print("Answer: ", int(option))
+                   print("===================================")
                    #input("Press Enter to continue...")
                    return int(best_option)
                 
             for option, D in option_images.items():
-                #print("Option: ", option)
+                print("Option: ", option)
                 edgesD = figure_edges(contours_D, 'D')
 
                 if sum(edgesB) > sum(edgesD):
@@ -701,10 +777,10 @@ class Agent:
                     edgesCD = 0
 
                 if edgesAB == edgesCD:
-                    #print("EDGES CD")
+                    print("EDGES CD")
                     success_count_AB += 1
                 if edgesAC == edgesBD:
-                    #print("EDGES BD")
+                    print("EDGES BD")
                     success_count_AB += 1
 
                 max_success_count = max(success_count_AB, success_count_AC)
@@ -713,16 +789,19 @@ class Agent:
                     best_success_count = max_success_count
 
                 if best_option is not None:
-                   #print("Answer: ", int(option))
-                   #print("===================================")
+                   print("Answer: ", int(option))
+                   print("===================================")
                    #input("Press Enter to continue...")
                    return int(best_option)
 
 
-            #print("No solution")
-            #print("===================================")
+            print("No solution")
+            print("===================================")
             #input("Press Enter to continue...")
 
 
-        ##print("Path: ", image_path, " type: ", problem_type, " visual: ", problem_hasVisual, " verbal: ", problem_hasVerbal)
+        
+
+
+        #print("Path: ", image_path, " type: ", problem_type, " visual: ", problem_hasVisual, " verbal: ", problem_hasVerbal)
         return -1
