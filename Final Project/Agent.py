@@ -78,6 +78,7 @@ class Agent:
                 edges_count.append(len(approx))         
             
             return edges_count
+
         
 
         figure_a = problem.figures["A"]
@@ -101,11 +102,6 @@ class Agent:
             #image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
             image = cv2.imread(image_path, )
 
-            # Check if image is loaded properly
-            if image is None:
-                #print(f"Error loading image {image_path}")
-                continue  # Skip this iteration and go to next figure
-
             # If the name is a letter, add it to the problem images. 
             if name.isalpha():
                 problem_images[name] = image
@@ -113,8 +109,11 @@ class Agent:
             elif name.isdigit():
                 option_images[name] = image
 
+        print(" PROBLEM: ",image_path)
+
         #if problem is 3x3
         if problem.problemType == "3x3":
+            
 
             A = problem_images.get('A')
             B = problem_images.get('B')
@@ -146,22 +145,21 @@ class Agent:
                 # Ensure image is grayscale
                 if len(img.shape) > 2:
                     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    
+
                 _, img_bin = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY_INV)
 
                 # Find connected components in the binary image
                 num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(img_bin, connectivity=8)
                             
-                 # Store figure info for the current option
-                figures_info = {"figures_count": num_labels - 1, "total_pixels": []}
+                # Store figure info for the current option
+                figures_info = {"figures_count": num_labels - 1, "total_pixels": [], "binary_img": img_bin}
 
                 # Process each figure (skip 0 because it is the background)
                 for i in range(1, num_labels):
                     figure_pixels = np.sum(labels == i)
                     figures_info["total_pixels"].append(figure_pixels)
-                    ##print(f"Figure {i} in {name} has {figure_pixels} black pixels")
 
-                image_info[name] = figures_info 
+                image_info[name] = figures_info  
             
 
             #print("=========================")
@@ -170,6 +168,128 @@ class Agent:
             # Initialize the result dictionary
             results = {}
 
+            # Perform operations on binary versions of images
+            bitwise_and_AB = cv2.bitwise_and(image_info['A']['binary_img'], image_info['B']['binary_img'])
+            bitwise_or_AB = cv2.bitwise_or(image_info['A']['binary_img'], image_info['B']['binary_img'])
+            bitwise_xor_AB = cv2.bitwise_xor(image_info['A']['binary_img'], image_info['B']['binary_img'])
+        
+
+            bitwise_and_AC = cv2.bitwise_and(image_info['A']['binary_img'], image_info['C']['binary_img'])
+            bitwise_or_AC = cv2.bitwise_or(image_info['A']['binary_img'], image_info['C']['binary_img'])
+            bitwise_xor_AC = cv2.bitwise_xor(image_info['A']['binary_img'], image_info['C']['binary_img'])
+
+            bitwise_and_GH = cv2.bitwise_and(image_info['G']['binary_img'], image_info['H']['binary_img'])
+            bitwise_or_GH = cv2.bitwise_or(image_info['G']['binary_img'], image_info['H']['binary_img'])
+            bitwise_xor_GH = cv2.bitwise_xor(image_info['G']['binary_img'], image_info['H']['binary_img'])
+
+            bitwise_not_xor_GH = cv2.bitwise_not(cv2.bitwise_xor(image_info['G']['binary_img'], image_info['H']['binary_img']))
+            bitwise_not_xor_AB = cv2.bitwise_not(cv2.bitwise_xor(image_info['A']['binary_img'], image_info['B']['binary_img']))
+
+
+            # Find connected components in the binary image for each bitwise image and store the results
+            for bitwise_image, name in zip([bitwise_and_AB, bitwise_or_AB, bitwise_xor_AB, 
+                                            bitwise_and_AC, bitwise_or_AC, bitwise_xor_AC, 
+                                            bitwise_and_GH, bitwise_or_GH, bitwise_xor_GH, 
+                                            bitwise_not_xor_GH, bitwise_not_xor_AB], 
+                                        ['and_AB', 'or_AB', 'xor_AB', 
+                                        'and_AC', 'or_AC', 'xor_AC', 
+                                        'and_GH', 'or_GH', 'xor_GH', 
+                                        'not_xor_GH', 'not_xor_AB']):
+                num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(bitwise_image, connectivity=8)
+                figures_info = {"figures_count": num_labels - 1, "total_pixels": []}
+
+                # Process each figure (skip 0 because it is the background)
+                for i in range(1, num_labels):
+                    #print("||| i", i)
+                    if 'not_xor' in name:
+                        
+                        figure_pixels = np.sum(labels == i)
+                        if figure_pixels < 10000: 
+                            figures_info["total_pixels"].append(figure_pixels)
+                            #print(" Figure Pixels nor xor: ", figure_pixels)
+                        
+                    else:
+                        figure_pixels = np.sum(labels == i)
+                        figures_info["total_pixels"].append(figure_pixels)
+                        #print(" Figure Pixels: ", figure_pixels)
+                #input("Press Enter to continue...")
+
+                image_info[name] = figures_info
+
+            logic_threshold = 200
+            
+            ABC_same = image_info['A']['figures_count'] == image_info['B']['figures_count'] == image_info['C']['figures_count'] and \
+                        similar_pixel_counts(image_info['A']['total_pixels'], image_info['B']['total_pixels'], logic_threshold)
+
+            results['ABC'] = ABC_same
+
+            AND_AB_same_C = similar_pixel_counts(image_info['and_AB']['total_pixels'], image_info['C']['total_pixels'], logic_threshold)
+                            
+            OR_AB_same_C = similar_pixel_counts(image_info['or_AB']['total_pixels'], image_info['C']['total_pixels'], logic_threshold)
+
+            xor_pixels = image_info['xor_AB']['total_pixels']
+            c_pixels = image_info['C']['total_pixels']
+
+            while len(xor_pixels) < len(c_pixels):
+                xor_pixels.append(0)
+            while len(c_pixels) < len(xor_pixels):
+                c_pixels.append(0)
+
+            XOR_AB_same_C = all(abs(p1 - p2) for p1, p2 in zip(image_info['xor_AB']['total_pixels'], image_info['C']['total_pixels']))
+            
+            print(all(abs(p1 - p2) for p1, p2 in zip(image_info['xor_AB']['total_pixels'], image_info['C']['total_pixels'])))
+            for p1, p2 in zip(image_info['xor_AB']['total_pixels'], image_info['C']['total_pixels']):
+                print(" P1: ", p1)
+                print(" P2: ", p2)
+
+            
+            print(" XOR AB - FigureS: ", image_info['xor_AB']['figures_count'], " Pixels: ", image_info['xor_AB']['total_pixels'], " XOR_AB flag: ", XOR_AB_same_C)
+            print(" C- FigureS: ", image_info['C']['figures_count'], " Pixels: ", image_info['C']['total_pixels'])
+            print(" Not XOR pixels: ", image_info['not_xor_AB']['total_pixels'])
+
+            results['AND_AB_same_C'] = AND_AB_same_C
+            results['OR_AB_same_C'] = OR_AB_same_C
+            results['XOR_AB_same_C'] = XOR_AB_same_C
+
+            AND_AC_same_B = similar_pixel_counts(image_info['and_AC']['total_pixels'], image_info['B']['total_pixels'], logic_threshold)
+
+            OR_AC_same_B = similar_pixel_counts(image_info['or_AC']['total_pixels'], image_info['B']['total_pixels'], logic_threshold)
+
+            xorab_pixels = image_info['xor_AC']['total_pixels']
+            b_pixels = image_info['B']['total_pixels']
+
+            while len(xorab_pixels) < len(b_pixels):
+                xorab_pixels.append(0)
+            while len(b_pixels) < len(xorab_pixels):
+                b_pixels.append(0)
+
+            XOR_AC_same_B = all(abs(p1 - p2) == 0 for p1, p2 in zip(image_info['xor_AC']['total_pixels'], image_info['B']['total_pixels']))
+            
+            print(all(abs(p1 - p2) for p1, p2 in zip(image_info['xor_AC']['total_pixels'], image_info['B']['total_pixels'])))
+            for p1, p2 in zip(image_info['xor_AC']['total_pixels'], image_info['B']['total_pixels']):
+                print(" P1: ", p1)
+                print(" P2: ", p2)
+            print(" XOR AC - FigureS: ", image_info['xor_AC']['figures_count'], " Pixels: ", image_info['xor_AC']['total_pixels'], " XOR_AC flag: ", XOR_AC_same_B)
+            print(" B- FigureS: ", image_info['B']['figures_count'], " Pixels: ", image_info['B']['total_pixels'])
+
+
+            results['AND_AC_same_B'] = AND_AC_same_B
+            results['OR_AC_same_B'] = OR_AC_same_B
+            results['XOR_AC_same_B'] = XOR_AC_same_B
+
+
+            #cv2.imshow('XOR_AC', bitwise_xor_AC)
+            #cv2.imshow('XOR_AB', bitwise_xor_AB)
+            #cv2.imshow('NOT_XOR_GH', bitwise_not_xor_GH)
+            #cv2.imshow('OR_AC_B', bitwise_or_AC)
+            #cv2.imshow('C', C)
+            #cv2.imshow('B', B)
+            #cv2.imshow('A', A)
+            #cv2.waitKey(0)
+            #cv2.destroyAllWindows()
+
+            
+            
             # 1. Compare A, B, and C
             ABC_same = image_info['A']['figures_count'] == image_info['B']['figures_count'] == image_info['C']['figures_count'] and \
                         similar_pixel_counts(image_info['A']['total_pixels'], image_info['B']['total_pixels'], 100)
@@ -241,6 +361,75 @@ class Agent:
                 print("||", key, value)
 
 
+            for option_name, option_img in option_images.items():
+                print("Option Name: ", option_name)
+                # Ensure image is grayscale
+                if len(option_img.shape) > 2:  
+                    option_img = cv2.cvtColor(option_img, cv2.COLOR_BGR2GRAY)
+
+                _, option_img_bin = cv2.threshold(option_img, 128, 255, cv2.THRESH_BINARY_INV)
+
+                # Resize the option image to match 'A'
+                option_img_bin = cv2.resize(option_img_bin, (problem_images['A'].shape[1], problem_images['A'].shape[0]))
+
+                # Find connected components in the binary image
+                num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(option_img_bin, connectivity=8)
+
+                option_info = {
+                    "figures_count": num_labels - 1,  # Subtract 1 for the background label
+                    "total_pixels": stats[1:, cv2.CC_STAT_AREA].tolist(),  # Ignore the background label
+                    "binary_img": option_img_bin
+                }
+
+                if OR_AB_same_C:
+                    if (image_info['or_GH']['figures_count'] == option_info['figures_count'] and \
+                            similar_pixel_counts(image_info['or_GH']['total_pixels'], option_info['total_pixels'], logic_threshold)):
+                        print(" GH or Option same")
+                        elapsed_time = time.time() - start_time
+                        print(" time: ", elapsed_time)
+                        return int(option_name)
+
+                if XOR_AB_same_C:
+                    print(" XOR GH: ", image_info['xor_GH']['total_pixels'], " Option info: ", option_info['total_pixels'])
+                    if (similar_pixel_counts(image_info['xor_GH']['total_pixels'], option_info['total_pixels'], 350)):
+                        print(" GH XOR Option same")
+                        elapsed_time = time.time() - start_time
+                        print(" time: ", elapsed_time)
+                        return int(option_name)
+
+                if AND_AB_same_C:
+                    if (image_info['and_GH']['figures_count'] == option_info['figures_count'] and \
+                            similar_pixel_counts(image_info['and_GH']['total_pixels'], option_info['total_pixels'], logic_threshold)):
+                        print(" GH and Option same")
+                        elapsed_time = time.time() - start_time
+                        print(" time: ", elapsed_time)
+                        return int(option_name)
+                    
+                    
+                if XOR_AC_same_B:
+                    #not_xor = image_info['not_xor_GH']['total_pixels']
+                    #option_pixels = option_info['total_pixels']
+
+                    #while len(not_xor) < len(option_pixels):
+                    #    xorab_pixels.append(0)
+                    #while len(option_pixels) < len(not_xor):
+                    #    option_pixels.append(0)
+                    print("Enter")
+                    print(all(abs(p1 - p2) for p1, p2 in zip(image_info['not_xor_GH']['total_pixels'], option_info['total_pixels'])))
+                    for p1, p2 in zip(image_info['not_xor_GH']['total_pixels'], option_info['total_pixels']):
+                        print(" P1: ", p1)
+                        print(" P2: ", p2)
+                    print(" Not XOR GH - FigureS: ", image_info['not_xor_GH']['figures_count'], " Pixels: ", image_info['not_xor_GH']['total_pixels'])
+                    print(" Option - FigureS: ", option_info['figures_count'], " Pixels: ", option_info['total_pixels'])
+
+                    if (similar_pixel_counts(image_info['not_xor_GH']['total_pixels'], option_info['total_pixels'], logic_threshold)):
+                        print(" GH NOT XOR Option same")
+                        elapsed_time = time.time() - start_time
+                        print(" time: ", elapsed_time)
+                        return int(option_name)
+                
+
+
             
 
             for option_name, option_img in option_images.items():
@@ -267,7 +456,6 @@ class Agent:
                 if results['ABC'] and \
                     option_info["figures_count"] == image_info['H']['figures_count'] and \
                     similar_pixel_counts(option_info['total_pixels'], image_info['H']['total_pixels'], 100):
-                    #print(f'Option {option_name} matches H for the ABC flag')
                     elapsed_time = time.time() - start_time
                     print(" time: ", elapsed_time)
                     return int(option_name)
@@ -275,7 +463,6 @@ class Agent:
                 if results['ADG'] and \
                     option_info["figures_count"] == image_info['F']['figures_count'] and \
                     similar_pixel_counts(option_info['total_pixels'], image_info['F']['total_pixels'], 100):
-                    #print(f'Option {option_name} matches F for the ADG flag')
                     elapsed_time = time.time() - start_time
                     print(" time: ", elapsed_time)
                     return int(option_name)
@@ -283,7 +470,6 @@ class Agent:
                 if results['A_E_B_F'] and \
                     option_info["figures_count"] == image_info['E']['figures_count'] and \
                     similar_pixel_counts(option_info['total_pixels'], image_info['E']['total_pixels'], 100):
-                    #print(f'Option {option_name} matches E for the A_E_B_F flag')
                     elapsed_time = time.time() - start_time
                     print(" time: ", elapsed_time)
                     return int(option_name)
@@ -298,7 +484,6 @@ class Agent:
 
                 _, option_img_bin = cv2.threshold(option_img, 128, 255, cv2.THRESH_BINARY_INV)
 
-                # Find connected components in the binary image
                 num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(option_img_bin, connectivity=8)
 
                 option_info = {
@@ -306,7 +491,6 @@ class Agent:
                     "total_pixels": stats[1:, cv2.CC_STAT_AREA].tolist()  # Ignore the background label
                 }
 
-                # Calculate the pixel change from option to H
                 #print(" PIXELS: ", sum(image_info['H']['total_pixels']), sum(option_info['total_pixels']))
                 pixel_change_option_H =  sum(option_info['total_pixels']) - sum(image_info['H']['total_pixels'])
                 if pixel_change_option_H > 0:
